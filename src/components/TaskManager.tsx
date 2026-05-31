@@ -1,35 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { trpc } from "@/trpc/client";
 
-export default function TaskManager() {
+interface Task {
+  id: string;
+  titulo: string;
+  descricao: string;
+  completed: boolean;
+  dataCriacao: Date;
+}
+
+interface FeedbackMessage {
+  type: "success" | "error";
+  text: string;
+}
+
+export default function TaskManager({
+  initialTasks,
+}: {
+  initialTasks: Task[];
+}) {
   const [newTitulo, setNewTitulo] = useState("");
   const [newDescricao, setNewDescricao] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitulo, setEditTitulo] = useState("");
   const [editDescricao, setEditDescricao] = useState("");
+  const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
+
+  const showFeedback = useCallback(
+    (type: "success" | "error", text: string) => {
+      setFeedback({ type, text });
+      setTimeout(() => setFeedback(null), 3000);
+    },
+    []
+  );
 
   const utils = trpc.useUtils();
-  const tasksQuery = trpc.task.list.useQuery();
+  const tasksQuery = trpc.task.list.useQuery(undefined, {
+    initialData: initialTasks,
+  });
   const createMutation = trpc.task.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (task) => {
       utils.task.list.invalidate();
       setNewTitulo("");
       setNewDescricao("");
+      showFeedback("success", `Tarefa "${task.titulo}" criada com sucesso!`);
+    },
+    onError: (error) => {
+      showFeedback("error", `Erro ao criar tarefa: ${error.message}`);
     },
   });
   const updateMutation = trpc.task.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (task) => {
       utils.task.list.invalidate();
       setEditingId(null);
+      showFeedback("success", `Tarefa "${task.titulo}" atualizada!`);
+    },
+    onError: (error) => {
+      showFeedback("error", `Erro ao atualizar: ${error.message}`);
     },
   });
   const toggleMutation = trpc.task.toggle.useMutation({
-    onSuccess: () => utils.task.list.invalidate(),
+    onSuccess: (task) => {
+      utils.task.list.invalidate();
+      showFeedback(
+        "success",
+        task.completed
+          ? `"${task.titulo}" concluída!`
+          : `"${task.titulo}" reaberta.`
+      );
+    },
+    onError: (error) => {
+      showFeedback("error", `Erro ao alterar status: ${error.message}`);
+    },
   });
   const deleteMutation = trpc.task.delete.useMutation({
-    onSuccess: () => utils.task.list.invalidate(),
+    onSuccess: (task) => {
+      utils.task.list.invalidate();
+      showFeedback("success", `Tarefa "${task.titulo}" excluída!`);
+    },
+    onError: (error) => {
+      showFeedback("error", `Erro ao excluir: ${error.message}`);
+    },
   });
 
   const handleCreate = (e: React.FormEvent) => {
@@ -65,6 +118,18 @@ export default function TaskManager() {
 
   return (
     <div className="w-full max-w-xl mx-auto">
+      {feedback && (
+        <div
+          className={`mb-4 px-4 py-2 rounded-lg text-sm font-medium transition-opacity ${
+            feedback.type === "success"
+              ? "bg-green-100 text-green-800 border border-green-300"
+              : "bg-red-100 text-red-800 border border-red-300"
+          }`}
+        >
+          {feedback.text}
+        </div>
+      )}
+
       <form onSubmit={handleCreate} className="flex flex-col gap-2 mb-6">
         <input
           type="text"

@@ -1,6 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
+/**
+ * TaskManager — Componente principal do gerenciador de tarefas.
+ *
+ * Decisões de design:
+ * - Usa useInfiniteQuery do React Query para infinite scroll (paginação por cursor)
+ * - Recebe initialTasks do Server Component (SSR) para hidratação instantânea
+ * - Feedback visual unificado via estado local com auto-dismiss de 3s
+ * - Edição inline para evitar navegação desnecessária (menos é mais)
+ * - IntersectionObserver para detectar quando o usuário chega ao fim da lista
+ */
+
+import { useState, useCallback, useRef, useEffect } from "react";
 import { trpc } from "@/trpc/client";
 
 interface Task {
@@ -28,6 +39,9 @@ export default function TaskManager({
   const [editDescricao, setEditDescricao] = useState("");
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
 
+  // Ref para o elemento sentinela do infinite scroll
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
   const showFeedback = useCallback(
     (type: "success" | "error", text: string) => {
       setFeedback({ type, text });
@@ -37,12 +51,42 @@ export default function TaskManager({
   );
 
   const utils = trpc.useUtils();
-  const tasksQuery = trpc.task.list.useQuery(undefined, {
-    initialData: initialTasks,
-  });
+
+  // Infinite scroll: usa paginação por cursor
+  const infiniteQuery = trpc.task.listPaginated.useInfiniteQuery(
+    { limit: 10 },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      initialData: {
+        pages: [{ items: initialTasks, nextCursor: initialTasks.length >= 10 ? initialTasks[initialTasks.length - 1]?.id : undefined }],
+        pageParams: [undefined],
+      },
+    }
+  );
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = infiniteQuery;
+
+  // IntersectionObserver: carrega mais tarefas quando o sentinela entra no viewport
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   const createMutation = trpc.task.create.useMutation({
     onSuccess: (task) => {
-      utils.task.list.invalidate();
+      utils.task.listPaginated.invalidate();
       setNewTitulo("");
       setNewDescricao("");
       showFeedback("success", `Tarefa "${task.titulo}" criada com sucesso!`);
@@ -53,7 +97,7 @@ export default function TaskManager({
   });
   const updateMutation = trpc.task.update.useMutation({
     onSuccess: (task) => {
-      utils.task.list.invalidate();
+      utils.task.listPaginated.invalidate();
       setEditingId(null);
       showFeedback("success", `Tarefa "${task.titulo}" atualizada!`);
     },
@@ -63,7 +107,7 @@ export default function TaskManager({
   });
   const toggleMutation = trpc.task.toggle.useMutation({
     onSuccess: (task) => {
-      utils.task.list.invalidate();
+      utils.task.listPaginated.invalidate();
       showFeedback(
         "success",
         task.completed
@@ -77,7 +121,7 @@ export default function TaskManager({
   });
   const deleteMutation = trpc.task.delete.useMutation({
     onSuccess: (task) => {
-      utils.task.list.invalidate();
+      utils.task.listPaginated.invalidate();
       showFeedback("success", `Tarefa "${task.titulo}" excluída!`);
     },
     onError: (error) => {
@@ -112,7 +156,8 @@ export default function TaskManager({
     });
   };
 
-  const tasks = tasksQuery.data ?? [];
+  // Flatten das páginas para obter lista completa carregada
+  const tasks = infiniteQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const pending = tasks.filter((t) => !t.completed).length;
   const completed = tasks.filter((t) => t.completed).length;
 
@@ -156,17 +201,17 @@ export default function TaskManager({
         </div>
       </form>
 
-      {tasksQuery.isLoading && (
+      {infiniteQuery.isLoading && (
         <p className="text-center text-gray-500">Carregando tarefas...</p>
       )}
 
-      {tasksQuery.isError && (
+      {infiniteQuery.isError && (
         <p className="text-center text-red-500">
           Erro ao carregar tarefas. Tente novamente.
         </p>
       )}
 
-      {!tasksQuery.isLoading && tasks.length === 0 && (
+      {!infiniteQuery.isLoading && tasks.length === 0 && (
         <p className="text-center text-gray-400 py-8">
           Nenhuma tarefa ainda. Adicione uma acima!
         </p>
@@ -318,6 +363,18 @@ export default function TaskManager({
               </li>
             ))}
           </ul>
+
+          {/* Sentinela do Infinite Scroll — quando visível, carrega próxima página */}
+          <div ref={loadMoreRef} className="py-4 text-center">
+            {isFetchingNextPage && (
+              <p className="text-sm text-gray-500">Carregando mais...</p>
+            )}
+            {!hasNextPage && tasks.length > 10 && (
+              <p className="text-sm text-gray-400">
+                Todas as tarefas foram carregadas.
+              </p>
+            )}
+          </div>
         </>
       )}
     </div>

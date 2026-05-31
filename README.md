@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gerenciador de Tarefas — NextJS + tRPC
 
-## Getting Started
+Sistema simples de gerenciamento de tarefas com CRUD completo, construído como case técnico para vaga de Software Engineer.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **NextJS 16** (App Router, Server Components, SSR)
+- **tRPC v11** (API type-safe end-to-end)
+- **React Query** (cache, infinite scroll, invalidação)
+- **Tailwind CSS v3** (estilização)
+- **Zod** (validação de input)
+- **TypeScript** (tipagem estática)
+
+## Arquitetura
+
+```
+src/
+├── server/
+│   ├── trpc/index.ts        # Inicialização tRPC + superjson
+│   ├── caller.ts            # Server-side caller para SSR
+│   └── routers/
+│       ├── _app.ts          # Router principal
+│       └── task.ts          # CRUD de tarefas (memória)
+├── trpc/
+│   ├── client.ts            # createTRPCReact (client-side)
+│   └── provider.tsx         # Provider com React Query
+├── app/
+│   ├── api/trpc/[trpc]/     # Route handler tRPC
+│   ├── layout.tsx           # Layout com TRPCProvider
+│   └── page.tsx             # SSR: pré-carrega tarefas
+└── components/
+    └── TaskManager.tsx       # UI completa com infinite scroll
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Como Executar
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# 1. Instalar dependências
+npm install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# 2. Rodar servidor de desenvolvimento
+npm run dev
 
-## Learn More
+# 3. Abrir no navegador
+open http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Comando | Descrição |
+|---------|-----------|
+| `npm run dev` | Servidor de desenvolvimento (hot reload) |
+| `npm run build` | Build de produção |
+| `npm run start` | Servidor de produção |
+| `npm run lint` | ESLint |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Funcionalidades
 
-## Deploy on Vercel
+### Backend (tRPC)
+- **Criar tarefa** — título obrigatório, descrição opcional
+- **Listar tarefas** — endpoint completo + endpoint paginado (cursor)
+- **Atualizar tarefa** — editar título e descrição
+- **Deletar tarefa** — remover por id
+- **Toggle** — marcar/desmarcar como concluída
+- **Validação** — Zod rejeita título vazio; erros significativos para tarefas inexistentes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Frontend
+- **SSR** — `page.tsx` é async Server Component (`force-dynamic`), pré-carrega tarefas no servidor
+- **Infinite Scroll** — `useInfiniteQuery` + `IntersectionObserver` carrega páginas conforme scroll
+- **Feedback visual** — mensagens de sucesso (verde) e erro (vermelho) com auto-dismiss de 3s
+- **Edição inline** — formulário aparece dentro do card sem navegar para outra página
+- **Validação no formulário** — botão desabilitado se título vazio ou só espaços
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Modelo de Dados
+
+```typescript
+interface Task {
+  id: string;        // gerado automaticamente (incremento)
+  titulo: string;    // obrigatório
+  descricao: string; // opcional (default "")
+  completed: boolean;
+  dataCriacao: Date;
+}
+```
+
+## Decisões Técnicas
+
+| Decisão | Motivo |
+|---------|--------|
+| Backend em memória (array) | Requisito do case — sem banco |
+| superjson | Serializar `Date` sem perda de tipo |
+| Cursor-based pagination | Mais eficiente que offset para listas mutáveis |
+| `force-dynamic` no page.tsx | Garante SSR a cada request (dados sempre atualizados) |
+| Tailwind v3 (não v4) | v4 usa binários nativos (oxide) que podem falhar em certos ambientes |
+| Edição inline (não rota separada) | UX mais fluida, "menos é mais" |
+| IntersectionObserver | Padrão nativo, sem dependência extra para infinite scroll |
+
+## Observações
+
+- Os dados vivem **em memória** — reiniciar o servidor apaga todas as tarefas (comportamento esperado)
+- A paginação usa **10 itens por página** (configurável via `PAGE_SIZE`)
+- O React Query faz **refetch automático** quando a aba ganha foco (`refetchOnWindowFocus`)

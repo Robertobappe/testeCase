@@ -1,3 +1,9 @@
+/**
+ * Inicialização do tRPC.
+ *
+ * - superjson como transformer para serializar Date, Map, Set etc.
+ * - createCallerFactory exportado para chamadas server-side (SSR)
+ */
 import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 

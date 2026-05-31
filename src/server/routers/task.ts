@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc";
 
+// Modelo da tarefa com campos em português conforme spec do case
 interface Task {
   id: string;
   titulo: string;
@@ -9,13 +10,42 @@ interface Task {
   dataCriacao: Date;
 }
 
+// Armazenamento em memória — sem banco de dados conforme requisito
 const tasks: Task[] = [];
 let nextId = 1;
 
+// Quantidade de itens por página para infinite scroll
+const PAGE_SIZE = 10;
+
 export const taskRouter = router({
+  // Retorna todas as tarefas (usado pelo SSR na carga inicial)
   list: publicProcedure.query(() => {
     return tasks;
   }),
+
+  // Paginação por cursor para infinite scroll
+  // Retorna PAGE_SIZE itens a partir do cursor (id da última tarefa vista)
+  listPaginated: publicProcedure
+    .input(
+      z.object({
+        cursor: z.string().nullish(),
+        limit: z.number().min(1).max(50).optional().default(PAGE_SIZE),
+      })
+    )
+    .query(({ input }) => {
+      const { cursor, limit } = input;
+      let startIndex = 0;
+
+      if (cursor) {
+        const cursorIndex = tasks.findIndex((t) => t.id === cursor);
+        startIndex = cursorIndex === -1 ? 0 : cursorIndex + 1;
+      }
+
+      const items = tasks.slice(startIndex, startIndex + limit);
+      const nextCursor = items.length === limit ? items[items.length - 1]?.id : undefined;
+
+      return { items, nextCursor };
+    }),
 
   create: publicProcedure
     .input(

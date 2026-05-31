@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Provider que conecta tRPC ao React Query.
+ *
+ * - httpBatchLink agrupa múltiplas chamadas tRPC em um único request HTTP
+ * - superjson garante serialização/deserialização consistente com o server
+ * - getBaseUrl retorna "" no browser (relative URL) e localhost no server
+ */
+
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";

@@ -3,9 +3,10 @@ import { router, publicProcedure } from "../trpc";
 
 interface Task {
   id: string;
-  title: string;
+  titulo: string;
+  descricao: string;
   completed: boolean;
-  createdAt: Date;
+  dataCriacao: Date;
 }
 
 const tasks: Task[] = [];
@@ -17,15 +18,37 @@ export const taskRouter = router({
   }),
 
   create: publicProcedure
-    .input(z.object({ title: z.string().min(1, "O título é obrigatório") }))
+    .input(
+      z.object({
+        titulo: z.string().min(1, "O título é obrigatório"),
+        descricao: z.string().optional().default(""),
+      })
+    )
     .mutation(({ input }) => {
       const task: Task = {
         id: String(nextId++),
-        title: input.title,
+        titulo: input.titulo,
+        descricao: input.descricao,
         completed: false,
-        createdAt: new Date(),
+        dataCriacao: new Date(),
       };
       tasks.push(task);
+      return task;
+    }),
+
+  update: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        titulo: z.string().min(1, "O título é obrigatório").optional(),
+        descricao: z.string().optional(),
+      })
+    )
+    .mutation(({ input }) => {
+      const task = tasks.find((t) => t.id === input.id);
+      if (!task) throw new Error("Tarefa não encontrada");
+      if (input.titulo !== undefined) task.titulo = input.titulo;
+      if (input.descricao !== undefined) task.descricao = input.descricao;
       return task;
     }),
 

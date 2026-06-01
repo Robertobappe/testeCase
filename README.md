@@ -1,7 +1,6 @@
 # Gerenciador de Tarefas — NextJS + tRPC
 
-Sistema simples de gerenciamento de tarefas com CRUD completo, construído como case técnico para vaga de Software Engineer.
-
+Sistema simples de gerenciamento de tarefas com CRUD completo
 ## Stack
 
 - **NextJS 16** (App Router, Server Components, SSR)
